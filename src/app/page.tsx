@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Search, Bell, Filter, LayoutGrid, Activity, Settings, 
   HelpCircle, LogOut, Map, Megaphone, Plus, Construction, Menu, X, Archive, Loader2, AlertTriangle, AlertCircle, FolderArchive
@@ -173,6 +174,7 @@ function TicTacLogin({ onLogin }: { onLogin: (role: string, name: string) => voi
 }
 
 function TicTacDashboard({ userRole, userName, onLogout }: { userRole: string, userName: string, onLogout: () => void }) {
+  const router = useRouter();
   const [currentView, setCurrentView] = useState<"dashboard" | "construction">("dashboard");
   const [activeTab, setActiveTab] = useState<"boards" | "arquivados">("boards");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -359,7 +361,7 @@ function TicTacDashboard({ userRole, userName, onLogout }: { userRole: string, u
 
               <div className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-[2vw]">
                 {/* Board_Card 1 */}
-                <div className="group bg-white rounded-2xl p-[1.5rem] shadow-sm border border-slate-100 flex flex-col hover:border-blue-700/30 hover:shadow-[0_0.5rem_1.5rem_rgba(29,78,216,0.08)] transition-all cursor-pointer min-h-[12rem] h-full">
+                <div onClick={() => router.push('/board/dev-tic-tac')} className="group bg-white rounded-2xl p-[1.5rem] shadow-sm border border-slate-100 flex flex-col hover:border-blue-700/30 hover:shadow-[0_0.5rem_1.5rem_rgba(29,78,216,0.08)] transition-all cursor-pointer min-h-[12rem] h-full">
                   <div className="flex justify-between items-start mb-[1rem]">
                     <div className="w-[3rem] h-[3rem] rounded-xl bg-blue-50 flex items-center justify-center text-blue-700 group-hover:bg-blue-700 group-hover:text-white transition-colors">
                       <Map className="w-[1.5rem] h-[1.5rem]" />
@@ -387,7 +389,7 @@ function TicTacDashboard({ userRole, userName, onLogout }: { userRole: string, u
                 </div>
 
                 {/* Board_Card 2 */}
-                <div className="group bg-white rounded-2xl p-[1.5rem] shadow-sm border border-slate-100 flex flex-col hover:border-blue-700/30 hover:shadow-[0_0.5rem_1.5rem_rgba(29,78,216,0.08)] transition-all cursor-pointer min-h-[12rem] h-full">
+                <div onClick={() => router.push('/board/mkt-digital')} className="group bg-white rounded-2xl p-[1.5rem] shadow-sm border border-slate-100 flex flex-col hover:border-blue-700/30 hover:shadow-[0_0.5rem_1.5rem_rgba(29,78,216,0.08)] transition-all cursor-pointer min-h-[12rem] h-full">
                   <div className="flex justify-between items-start mb-[1rem]">
                     <div className="w-[3rem] h-[3rem] rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-blue-700 group-hover:text-white transition-colors">
                       <Megaphone className="w-[1.5rem] h-[1.5rem]" />
@@ -484,16 +486,34 @@ export default function AppRoot() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState("ADMIN");
   const [userName, setUserName] = useState("Admin");
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+    const savedAuth = localStorage.getItem("tictac_auth");
+    if (savedAuth) {
+      try {
+        const parsed = JSON.parse(savedAuth);
+        setUserRole(parsed.role);
+        setUserName(parsed.name);
+        setIsAuthenticated(true);
+      } catch (e) {}
+    }
+  }, []);
 
   const handleAuthSuccess = (role: string, name: string) => {
     setUserRole(role);
     setUserName(name);
     setIsAuthenticated(true);
+    localStorage.setItem("tictac_auth", JSON.stringify({ role, name }));
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    localStorage.removeItem("tictac_auth");
   };
+
+  if (!isClient) return null; // Avoid hydration mismatch on initial load with localStorage
 
   return (
     <>
