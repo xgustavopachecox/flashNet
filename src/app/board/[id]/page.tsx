@@ -4,21 +4,15 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import styles from './board.module.css';
 import { 
-  LayoutDashboard, 
-  Activity, 
-  Settings, 
-  Search, 
-  Bell, 
-  HelpCircle, 
-  UserCircle, 
   SlidersHorizontal, 
-  UserPlus, 
   MoreHorizontal, 
   AlertTriangle,
   Plus,
   MessageSquare,
   Calendar
 } from 'lucide-react';
+import Sidebar_Main from '@/components/Sidebar_Main';
+import Top_Nav from '@/components/Top_Nav';
 
 // --- Types ---
 type UserRole = 'ADMIN' | 'EDITOR' | 'VISUALIZADOR' | 'MEMBRO';
@@ -30,10 +24,10 @@ interface Task {
   description?: string;
   priority: Priority;
   date: string;
-  assignee: string; // url to avatar
+  assignee: string; 
   comments?: number;
   alert?: string;
-  isCriticaLayout?: boolean; // For specific visual styling
+  isCriticaLayout?: boolean; 
 }
 
 interface ColumnData {
@@ -48,7 +42,7 @@ interface BoardData {
   name: string;
   sprint: string;
   project: string;
-  members: string[]; // urls to avatars
+  members: string[]; 
   columns: ColumnData[];
 }
 
@@ -56,7 +50,6 @@ export default function BoardPage() {
   const params = useParams();
   const router = useRouter();
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>('ADMIN');
-  const [currentUserName, setCurrentUserName] = useState<string>('Admin');
   const [boardData, setBoardData] = useState<BoardData | null>(null);
   const [columns, setColumns] = useState<ColumnData[]>([]);
 
@@ -66,7 +59,6 @@ export default function BoardPage() {
       try {
         const parsed = JSON.parse(savedAuth);
         setCurrentUserRole(parsed.role as UserRole);
-        setCurrentUserName(parsed.name);
       } catch (e) {}
     }
   }, []);
@@ -123,16 +115,17 @@ export default function BoardPage() {
     }, 500);
   }, [params?.id]);
 
-  const handleNavigateToConstruction = () => alert('Navegar para: TELA EM CONSTRUÇÃO');
+  const handleNavigateToConstruction = () => router.push('/construction');
   const handleOpenModal = (modalName: string) => alert(`Abrir modal: ${modalName}`);
 
   const handleDragStart = (e: React.DragEvent, taskId: string, sourceColId: string) => {
+    if (currentUserRole === 'VISUALIZADOR') return;
     e.dataTransfer.setData("taskId", taskId);
     e.dataTransfer.setData("sourceColId", sourceColId);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault(); // Necessário para permitir o drop
+    e.preventDefault(); 
   };
 
   const handleDrop = (e: React.DragEvent, targetColId: string) => {
@@ -148,7 +141,6 @@ export default function BoardPage() {
     const taskIndex = newCols[sourceColIndex].tasks.findIndex(t => t.id === taskId);
     if (taskIndex === -1) return;
     
-    // Remove from source and push to target
     const [movedTask] = newCols[sourceColIndex].tasks.splice(taskIndex, 1);
     newCols[targetColIndex].tasks.push(movedTask);
     
@@ -175,80 +167,11 @@ export default function BoardPage() {
 
   return (
     <div className={styles.container}>
-      {/* Sidebar */}
-      <aside className={styles.sidebar}>
-        <div className={styles.sidebarHeader}>
-          <div className={styles.sidebarLogo}>
-            <LayoutDashboard size={18} />
-          </div>
-          <div className={styles.sidebarTitleGroup}>
-            <span className={styles.sidebarTitle}>Tic Tac</span>
-            <span className={styles.sidebarSubtitle}>Premium Workspace</span>
-          </div>
-        </div>
+      <Sidebar_Main />
 
-        <nav className={styles.sidebarNav}>
-          <a onClick={() => router.push('/')} className={styles.navItem}>
-            <LayoutDashboard size={18} />
-            Meus boards
-          </a>
-          <a onClick={handleNavigateToConstruction} className={styles.navItem}>
-            <Activity size={18} />
-            Atividades Global
-          </a>
-          <a onClick={handleNavigateToConstruction} className={styles.navItem}>
-            <Settings size={18} />
-            Configurações
-          </a>
-        </nav>
-
-        {/* User Role Footer Matching Main Page */}
-        <div className="mt-auto border-t border-slate-200 p-[1.5rem] flex flex-col gap-[1rem]">
-          <div 
-            onClick={() => {
-              localStorage.removeItem("tictac_auth");
-              router.push('/');
-            }}
-            className="flex items-center gap-[0.75rem] p-[0.75rem] bg-white border border-slate-200 rounded-2xl w-full cursor-pointer hover:bg-slate-100 transition-colors shadow-sm group"
-          >
-            <div className="flex items-center justify-center w-[2.5rem] h-[2.5rem] rounded-full bg-blue-100 text-blue-700 font-bold text-lg shrink-0 border border-blue-200 group-hover:bg-blue-700 group-hover:text-white transition-colors">
-              {currentUserName.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex flex-col flex-1 truncate">
-              <span className="text-sm font-bold text-slate-800 tracking-wide truncate">{currentUserName}</span>
-              <span className="text-[0.65rem] text-slate-500 font-bold tracking-widest uppercase">{currentUserRole}</span>
-            </div>
-            <button className="w-[2rem] h-[2rem] flex items-center justify-center rounded-lg bg-slate-100 group-hover:bg-red-100 group-hover:text-red-700 transition-colors shrink-0">
-              <svg width="1.25rem" height="1.25rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Workspace */}
       <main className={styles.mainWorkspace}>
-        {/* Top Navbar */}
-        <header className={styles.topNav}>
-          <div className={styles.topNavLeft}>
-            <span className={styles.boardName}>Projetos</span>
-            <div className={styles.tabs}>
-              <div className={`${styles.tab} ${styles.active}`}>Board</div>
-              <div className={styles.tab} onClick={handleNavigateToConstruction}>Atividades</div>
-              <div className={styles.tab} onClick={handleNavigateToConstruction}>Files</div>
-            </div>
-          </div>
-          
-          <div className={styles.topNavRight}>
-            <div className={styles.searchBar}>
-              <Search size={16} color="#94a3b8" />
-              <input type="text" placeholder="Busca rápida..." className={styles.searchInput} />
-            </div>
-            <div className={styles.headerIcons}>
-              <div className={styles.iconBtn}><Bell size={20} /></div>
-              <div className={styles.iconBtn}><HelpCircle size={20} /></div>
-            </div>
-          </div>
-        </header>
+        {/* Consistent Top Navigation */}
+        <Top_Nav boardName={boardData.name} activeTab="board" />
 
         {/* Board Header Section */}
         <div className={styles.boardHeader}>
