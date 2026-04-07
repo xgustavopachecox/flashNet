@@ -2,11 +2,27 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { LayoutDashboard, Activity, Settings } from 'lucide-react';
+import { LayoutDashboard, Activity, Settings, Plus } from 'lucide-react';
 import User_Role_Footer from './User_Role_Footer';
 
-export default function Sidebar_Main() {
+interface SidebarMainProps {
+  onOpenCreateBoard?: () => void;
+  activeView?: 'dashboard' | 'activity' | 'none';
+}
+
+export default function Sidebar_Main({ onOpenCreateBoard, activeView }: SidebarMainProps) {
   const router = useRouter();
+  const [currentUserRole, setCurrentUserRole] = React.useState<string>('ADMIN');
+
+  React.useEffect(() => {
+    const savedAuth = localStorage.getItem("tictac_auth");
+    if (savedAuth) {
+      try {
+        const parsed = JSON.parse(savedAuth);
+        setCurrentUserRole(parsed.role || 'ADMIN');
+      } catch (e) {}
+    }
+  }, []);
 
   const handleNavigateToConstruction = () => router.push('/construction');
 
@@ -25,31 +41,34 @@ export default function Sidebar_Main() {
 
       {/* Navigation */}
       <nav className="flex-1 p-[1rem] flex flex-col gap-[0.5rem]">
+        {/* Primary Action (Conditional for Admin) */}
+        {currentUserRole === 'ADMIN' && onOpenCreateBoard && (
+          <button 
+            onClick={onOpenCreateBoard}
+            className="w-full bg-blue-600 text-white font-black text-[0.8rem] uppercase tracking-widest rounded-xl px-[1.5rem] py-[1rem] flex items-center justify-center gap-[0.75rem] shadow-lg shadow-blue-200 hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-300 transition-all active:scale-[0.98] mb-[2rem] border border-blue-500"
+          >
+            <Plus size={18} /> Criar Quadro
+          </button>
+        )}
+
         <span className="text-[0.65rem] font-black text-slate-400 uppercase tracking-widest pl-[0.5rem] py-[0.5rem]">Menu Principal</span>
         
         <button 
           onClick={() => router.push('/')}
-          className="flex items-center gap-[0.75rem] p-[0.75rem] rounded-xl text-slate-600 font-bold text-sm hover:bg-white hover:text-blue-600 hover:shadow-sm transition-all duration-300 group"
+          className={`flex items-center gap-[0.75rem] p-[0.75rem] rounded-xl font-bold text-sm transition-all duration-300 group ${activeView === 'dashboard' ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50' : 'text-slate-600 hover:bg-white hover:text-blue-600 hover:shadow-sm'}`}
         >
           <LayoutDashboard size={18} className="group-hover:scale-110 transition-transform" />
           Meus boards
         </button>
 
         <button 
-          onClick={handleNavigateToConstruction}
-          className="flex items-center gap-[0.75rem] p-[0.75rem] rounded-xl text-slate-600 font-bold text-sm hover:bg-white hover:text-blue-600 hover:shadow-sm transition-all duration-300 group"
+          onClick={() => router.push('/activity')}
+          className={`flex items-center gap-[0.75rem] p-[0.75rem] rounded-xl font-bold text-sm transition-all duration-300 group ${activeView === 'activity' ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100/50' : 'text-slate-600 hover:bg-white hover:text-blue-600 hover:shadow-sm'}`}
         >
           <Activity size={18} className="group-hover:scale-110 transition-transform" />
           Atividades Global
         </button>
 
-        <button 
-          onClick={handleNavigateToConstruction}
-          className="flex items-center gap-[0.75rem] p-[0.75rem] rounded-xl text-slate-600 font-bold text-sm hover:bg-white hover:text-blue-600 hover:shadow-sm transition-all duration-300 group"
-        >
-          <Settings size={18} className="group-hover:scale-110 transition-transform" />
-          Configurações
-        </button>
       </nav>
 
       {/* Footer Layer */}

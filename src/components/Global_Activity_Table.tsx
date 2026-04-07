@@ -1,11 +1,12 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Action_Badge from './Action_Badge';
 
-interface ActivityLogEntry {
+interface GlobalActivityEntry {
   id: string;
   datetime: string;
+  boardName: string;
   user: {
     name: string;
     avatar: string;
@@ -16,19 +17,20 @@ interface ActivityLogEntry {
   justification: string;
 }
 
-interface ActivityLogTableProps {
-  entries: ActivityLogEntry[];
+interface GlobalActivityTableProps {
+  entries: GlobalActivityEntry[];
 }
 
-const Activity_Log_Table: React.FC<ActivityLogTableProps> = ({ entries }) => {
+const Global_Activity_Table: React.FC<GlobalActivityTableProps> = ({ entries }) => {
   return (
-    <div className="w-full bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden shadow-sm transition-all duration-500 hover:shadow-lg">
+    <div className="w-full bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-sm transition-all duration-500 hover:shadow-lg">
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[50rem]">
+        <table className="w-full text-left border-collapse min-w-[65rem]">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               <th className="px-[1.5rem] py-[1.2rem] text-[0.7rem] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Data e Hora</th>
               <th className="px-[1.5rem] py-[1.2rem] text-[0.7rem] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Usuário</th>
+              <th className="px-[1.5rem] py-[1.2rem] text-[0.7rem] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Quadro</th>
               <th className="px-[1.5rem] py-[1.2rem] text-[0.7rem] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Ação</th>
               <th className="px-[1.5rem] py-[1.2rem] text-[0.7rem] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Entidade (Card)</th>
               <th className="px-[1.5rem] py-[1.2rem] text-[0.7rem] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Justificativa</th>
@@ -58,15 +60,20 @@ const Activity_Log_Table: React.FC<ActivityLogTableProps> = ({ entries }) => {
                     </div>
                   </td>
                   <td className="px-[1.5rem] py-[1.5rem]">
+                    <span className="text-[0.7rem] font-black text-slate-400 bg-slate-100 px-[0.6rem] py-[0.3rem] rounded-lg tracking-wider group-hover:bg-blue-600 group-hover:text-white transition-colors uppercase whitespace-nowrap inline-block">
+                      {entry.boardName}
+                    </span>
+                  </td>
+                  <td className="px-[1.5rem] py-[1.5rem]">
                     <Action_Badge action={entry.action} />
                   </td>
                   <td className="px-[1.5rem] py-[1.5rem]">
-                    <span className="text-[0.85rem] font-bold text-blue-700 bg-blue-50 px-[0.6rem] py-[0.3rem] rounded-lg border border-blue-100/50 hover:bg-blue-600 hover:text-white transition-colors cursor-pointer">
+                    <span className="text-[0.85rem] font-bold text-blue-700 bg-blue-50 px-[0.6rem] py-[0.3rem] rounded-lg border border-blue-100/50 hover:bg-blue-600 hover:text-white transition-colors cursor-pointer whitespace-nowrap inline-block">
                       {entry.entity}
                     </span>
                   </td>
-                  <td className="px-[1.5rem] py-[1.5rem] max-w-[20rem]">
-                    <p className="text-[0.85rem] text-slate-600 font-medium leading-relaxed italic border-l-[3px] border-slate-200 pl-[0.75rem] group-hover:border-blue-400 transition-all">
+                  <td className="px-[1.5rem] py-[1.5rem] max-w-[15rem]">
+                    <p className="text-[0.85rem] text-slate-600 font-medium leading-relaxed italic border-l-[3px] border-slate-200 pl-[0.75rem] group-hover:border-blue-400 transition-all line-clamp-2">
                       "{entry.justification}"
                     </p>
                   </td>
@@ -74,8 +81,8 @@ const Activity_Log_Table: React.FC<ActivityLogTableProps> = ({ entries }) => {
               ))
             ) : (
                 <tr>
-                  <td colSpan={5} className="px-[1.5rem] py-[4rem] text-center">
-                    <span className="text-[1rem] font-bold text-slate-400">Nenhuma atividade registrada.</span>
+                  <td colSpan={6} className="px-[1.5rem] py-[5rem] text-center">
+                    <span className="text-[1rem] font-bold text-slate-400">Nenhuma atividade global registrada.</span>
                   </td>
                 </tr>
             )}
@@ -86,4 +93,4 @@ const Activity_Log_Table: React.FC<ActivityLogTableProps> = ({ entries }) => {
   );
 };
 
-export default Activity_Log_Table;
+export default Global_Activity_Table;

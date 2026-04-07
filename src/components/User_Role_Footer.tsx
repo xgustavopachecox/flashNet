@@ -22,7 +22,7 @@ export default function User_Role_Footer() {
 
   const handleLogout = () => {
     localStorage.removeItem("tictac_auth");
-    router.push('/');
+    window.location.href = '/';
   };
 
   return (

@@ -7,8 +7,19 @@ import {
   HelpCircle, LogOut, Map, Megaphone, Plus, Construction, Menu, X, Archive, Loader2, AlertTriangle, AlertCircle, FolderArchive
 } from "lucide-react";
 import { Inter } from "next/font/google";
+import Create_Board_Modal from "@/components/modals/Create_Board_Modal";
+import Top_Nav from "@/components/Top_Nav";
+import Sidebar_Main from "@/components/Sidebar_Main";
 
 const inter = Inter({ subsets: ["latin"] });
+
+// --- ICON REGISTRY ---
+const ICON_MAP: Record<string, any> = {
+  'map': Map,
+  'megaphone': Megaphone,
+  'layout-grid': LayoutGrid,
+  'activity': Activity,
+};
 
 // --- VIEWS E APOIO ---
 
@@ -179,6 +190,41 @@ function TicTacDashboard({ userRole, userName, onLogout }: { userRole: string, u
   const [activeTab, setActiveTab] = useState<"boards" | "arquivados">("boards");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAnimatingTab, setIsAnimatingTab] = useState(false);
+  const [isCreateBoardOpen, setIsCreateBoardOpen] = useState(false);
+  const [boards, setBoards] = useState([
+    { id: 'dev-tic-tac', name: 'Desenvolvimento Tic Tac', description: 'Planejamento estratégico trimestral', icon: 'map', color: 'blue', members: 12, tasks: 48, initials: ['TS', 'AB'], extra: 4, isArchived: false, isDefault: true },
+    { id: 'mkt-digital', name: 'Marketing Digital', description: 'Campanhas de redes sociais', icon: 'megaphone', color: 'slate', members: 5, tasks: 16, initials: ['MK'], extra: 2, isArchived: false, isDefault: true }
+  ]);
+
+  useEffect(() => {
+    const savedBoardsList = localStorage.getItem('tictac_all_boards');
+    let baseBoards = boards;
+    
+    if (savedBoardsList) {
+       try {
+         const parsed = JSON.parse(savedBoardsList);
+         // Filter out defaults to re-inject them and avoid duplicates if needed
+         baseBoards = [...boards, ...parsed.filter((pb: any) => !pb.isDefault)];
+       } catch (e) {}
+    }
+
+    const updated = baseBoards.map(b => {
+      const saved = localStorage.getItem(`tictac_board_info_${b.id}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return { 
+            ...b, 
+            name: parsed.name || b.name, 
+            description: parsed.description || b.description, 
+            isArchived: !!parsed.isArchived 
+          };
+        } catch (e) {}
+      }
+      return b;
+    });
+    setBoards(updated);
+  }, []);
 
   const handleNavigate = () => {
     setCurrentView("construction");
@@ -196,8 +242,98 @@ function TicTacDashboard({ userRole, userName, onLogout }: { userRole: string, u
   };
 
   const handleModal = () => {
-    console.log("Abertura de Modal Ativada");
+    setIsCreateBoardOpen(true);
   };
+
+  const handleSaveNewBoard = (data: { name: string; description: string; members: string[] }) => {
+    const newId = `custom-${Date.now()}`; // Unique numeric ID
+    const newBoard = {
+      id: newId,
+      name: data.name,
+      description: data.description,
+      icon: 'map',
+      color: 'blue' as const,
+      members: data.members.length,
+      tasks: 0,
+      initials: data.members.slice(0, 2),
+      extra: data.members.length > 2 ? data.members.length - 2 : 0,
+      isArchived: false,
+      isDefault: false
+    };
+
+    // 1. Initial State for the Board Workspace (EMPTY 3 COLUMNS)
+    const initialBoardData = {
+      id: newId,
+      name: data.name,
+      sprint: 'SPRINT INICIAL',
+      project: 'GERENCIAMENTO DE PROJETO',
+      members: data.members,
+      columns: [
+        { id: `bk-${newId}`, title: 'A FAZER', tasks: [] },
+        { id: `wp-${newId}`, title: 'EM ANDAMENTO', tasks: [] },
+        { id: `dn-${newId}`, title: 'CONCLUÍDO', tasks: [] }
+      ]
+    };
+    localStorage.setItem(`tictac_board_data_${newId}`, JSON.stringify(initialBoardData));
+
+    // 2. Persistent Board Metadata (Info)
+    localStorage.setItem(`tictac_board_info_${newId}`, JSON.stringify({
+      name: data.name,
+      description: data.description,
+      isArchived: false
+    }));
+
+    // 3. Persistent Global Register of Custom Boards
+    const customBoards = JSON.parse(localStorage.getItem('tictac_all_boards') || '[]');
+    localStorage.setItem('tictac_all_boards', JSON.stringify([...customBoards, newBoard]));
+
+    // 4. Initialize activity log
+    const activity = {
+      id: Date.now().toString(),
+      datetime: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      user: { name: userName, avatar: 'AD', role: userRole },
+      action: 'CARD CRIADO' as any,
+      entity: data.name,
+      justification: 'Início do projeto: Workspace configurado com colunas padrão (A Fazer, Em Andamento, Concluído).'
+    };
+    localStorage.setItem(`tictac_activity_log_${newId}`, JSON.stringify([activity]));
+
+    setBoards([...boards, newBoard]);
+    setIsCreateBoardOpen(false);
+    
+    // Proactively navigate to the new empty board
+    router.push(`/board/${newId}`);
+  };
+
+  // --- Multi-Tenant Filtering Logic (Deep Shield) ---
+  const filteredBoards = boards.filter(board => {
+    if (userRole === 'ADMIN') return true;
+    
+    // Normalize identity for robust lookup
+    const searchName = (userName || 'Membro').toUpperCase().trim();
+
+    // Check persistent membership database
+    const boardDataRaw = typeof window !== 'undefined' ? localStorage.getItem(`tictac_board_data_${board.id}`) : null;
+    if (boardDataRaw) {
+      try {
+        const boardData = JSON.parse(boardDataRaw);
+        // Deep search through member list (case-insensitive)
+        const hasAccess = boardData.members?.some((m: string) => m.toUpperCase().trim() === searchName);
+        if (hasAccess) return true;
+      } catch (e) {}
+    }
+    
+    // Proto-Board Whitelist (Explicit Permissions for Bob & Alice)
+    const bid = board.id.toLowerCase();
+    if (bid === 'dev-tic-tac' || (board.isDefault && board.name.includes("Desenvolvimento"))) {
+      if (['ALICE', 'BOB'].includes(searchName)) return true;
+    }
+    if (bid === 'mkt-digital' || (board.isDefault && board.name.includes("Marketing"))) {
+      if (['CAROL'].includes(searchName)) return true;
+    }
+    
+    return false;
+  });
 
   return (
     <div className={`min-h-screen bg-slate-50 flex flex-col md:flex-row ${inter.className} animate-in fade-in duration-500`}>
@@ -219,122 +355,21 @@ function TicTacDashboard({ userRole, userName, onLogout }: { userRole: string, u
       </div>
 
       {/* Sidebar_Nav */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-40 bg-slate-50 border-r border-slate-200 flex flex-col transition-transform duration-300 shadow-xl 
-        md:translate-x-0 md:static md:w-[20vw] md:min-w-[15rem] md:shadow-none
-        ${isMobileMenuOpen ? 'translate-x-0 w-[80vw]' : '-translate-x-full'}
-      `}>
-        <div className="p-[2vw] flex flex-col h-full overflow-y-auto">
-          {/* Logo Identity */}
-          <div className="flex items-center gap-[0.75rem] mb-[2rem]">
-            <div className="bg-blue-700 w-[2.5rem] h-[2.5rem] rounded-full flex items-center justify-center shrink-0">
-              <svg width="1.25rem" height="1.25rem" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
-            <div className="flex flex-col">
-              <h2 className="text-xl font-bold text-slate-800 leading-none">Tic Tac</h2>
-              <span className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-[0.25rem]">Premium Workspace</span>
-            </div>
-          </div>
-
-          {/* Primary Action */}
-          {userRole === 'ADMIN' && (
-            <button 
-              onClick={handleModal}
-              className="w-full bg-blue-700 text-white hover:bg-blue-800 transition-all transform hover:-translate-y-[0.1rem] rounded-xl h-[3rem] flex items-center justify-center gap-[0.5rem] font-medium text-sm mb-[2rem] shadow-[0_0.25rem_0.75rem_rgba(29,78,216,0.3)] hover:shadow-[0_0.35rem_1rem_rgba(29,78,216,0.4)]"
-            >
-              <Plus className="w-[1rem] h-[1rem]" />
-              Criar Quadro
-            </button>
-          )}
-
-          {/* Main Navigation */}
-          <nav className="flex-1 flex flex-col gap-[0.25rem]">
-            <button onClick={() => setCurrentView("dashboard")} className={`flex items-center gap-[0.75rem] px-[1rem] py-[0.75rem] rounded-xl font-medium text-sm transition-colors text-left ${currentView === 'dashboard' ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-200 hover:text-slate-800'}`}>
-              <LayoutGrid className="w-[1.25rem] h-[1.25rem]" />
-              Meus boards
-            </button>
-            <button onClick={handleNavigate} className="flex items-center gap-[0.75rem] px-[1rem] py-[0.75rem] text-slate-500 hover:bg-slate-200 hover:text-slate-800 rounded-xl font-medium text-sm transition-colors text-left group">
-              <Activity className="w-[1.25rem] h-[1.25rem] group-hover:scale-110 transition-transform" />
-              Atividades Global
-            </button>
-            <button onClick={handleNavigate} className="flex items-center gap-[0.75rem] px-[1rem] py-[0.75rem] text-slate-500 hover:bg-slate-200 hover:text-slate-800 rounded-xl font-medium text-sm transition-colors text-left group">
-              <Settings className="w-[1.25rem] h-[1.25rem] group-hover:rotate-180 transition-transform duration-500" />
-              Configurações
-            </button>
-          </nav>
-
-          {/* User_Role_Footer */}
-          <div className="mt-[2rem] border-t border-slate-200 pt-[1.5rem] flex flex-col gap-[1rem]">
-            <button onClick={handleNavigate} className="flex items-center gap-[0.75rem] px-[1rem] py-[0.5rem] text-slate-500 hover:text-slate-800 transition-colors text-sm font-medium w-full text-left">
-              <HelpCircle className="w-[1.25rem] h-[1.25rem]" />
-              Support
-            </button>
-
-            {/* Ação de Logout Conforme Solicitado */}
-            <div className="flex items-center gap-[0.75rem] p-[0.75rem] bg-white border border-slate-200 rounded-2xl w-full mt-[0.5rem] cursor-pointer hover:bg-slate-100 transition-colors shadow-sm group" onClick={onLogout}>
-              <div className="flex items-center justify-center w-[2.5rem] h-[2.5rem] rounded-full bg-blue-100 text-blue-700 font-bold text-lg shrink-0 border border-blue-200 group-hover:bg-blue-700 group-hover:text-white transition-colors">
-                {userName.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex flex-col flex-1 truncate">
-                <span className="text-sm font-bold text-slate-800 tracking-wide truncate">{userName}</span>
-                <span className="text-[0.65rem] text-slate-500 font-bold tracking-widest uppercase">{userRole}</span>
-              </div>
-              <button 
-                className="w-[2rem] h-[2rem] flex items-center justify-center rounded-lg bg-slate-100 group-hover:bg-red-100 group-hover:text-red-700 transition-colors shrink-0"
-                title="Deslogar e voltar pro Login"
-              >
-                <LogOut className="w-[1.25rem] h-[1.25rem] group-hover:scale-110 transition-transform" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <Sidebar_Main 
+        onOpenCreateBoard={() => setIsCreateBoardOpen(true)} 
+        activeView="dashboard" 
+      />
 
       {/* Main_Content */}
       <main className="flex-1 flex flex-col bg-white h-screen overflow-y-auto relative w-full">
         
         {/* TopNav Section */}
-        <header className="bg-white border-b border-slate-200 px-[4vw] py-[1.25rem] flex flex-col md:flex-row md:items-center justify-between gap-[1rem] sticky top-0 z-10 w-full hidden md:flex">
-          <div className="flex items-center gap-[2.5rem]">
-            <h1 className="text-2xl font-bold text-slate-800">Projetos</h1>
-            
-            {/* Tabs com Animação Visual */}
-            <div className="flex gap-[1.5rem] mt-[0.25rem]">
-              <button 
-                onClick={() => switchTab("boards")}
-                className={`text-xs font-bold uppercase tracking-widest pb-[1.5rem] -mb-[1.5rem] transition-all relative ${activeTab === 'boards' ? 'text-blue-700' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                Meus boards
-                {activeTab === 'boards' && <span className="absolute bottom-0 left-0 right-0 h-[3px] bg-blue-700 rounded-t-sm" />}
-              </button>
-              <button 
-                onClick={() => switchTab("arquivados")}
-                className={`text-xs font-bold uppercase tracking-widest pb-[1.5rem] -mb-[1.5rem] transition-all relative ${activeTab === 'arquivados' ? 'text-blue-700' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                Arquivados
-                {activeTab === 'arquivados' && <span className="absolute bottom-0 left-0 right-0 h-[3px] bg-blue-700 rounded-t-sm" />}
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-[1.5rem] flex-1 max-w-lg justify-end">
-            <div className="relative group flex-1 max-w-sm">
-              <Search className="w-[1.25rem] h-[1.25rem] text-slate-400 absolute left-[1rem] top-1/2 -translate-y-1/2 group-focus-within:text-blue-700 transition-colors" />
-              <input 
-                type="text" 
-                placeholder="Pesquisar boards..." 
-                className="w-full h-[2.5rem] bg-slate-50 rounded-full pl-[2.75rem] pr-[1rem] text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-800/10 border border-transparent focus:border-slate-200 transition-all font-medium"
-              />
-            </div>
-            <button onClick={handleNavigate} className="relative text-slate-500 hover:text-slate-800 transition-colors shrink-0">
-              <Bell className="w-[1.5rem] h-[1.5rem]" />
-              <span className="absolute -top-[0.25rem] -right-[0.25rem] w-[0.75rem] h-[0.75rem] bg-red-700 rounded-full border-2 border-white"></span>
-            </button>
-          </div>
-        </header>
+        <Top_Nav 
+          boardName="Projetos" 
+          userName={userName}
+          activeTab={activeTab === 'boards' ? 'boards' : 'arquivados'} 
+          onTabChange={(tab) => switchTab(tab)} 
+        />
 
         {/* View Routing / Tab Content Routing */}
         {currentView === "dashboard" ? (
@@ -350,70 +385,43 @@ function TicTacDashboard({ userRole, userName, onLogout }: { userRole: string, u
                   {activeTab === 'boards' ? 'Planeje suas tasks para sua equipe.' : 'Acesse boards bloqueados, encerrados e históricos.'}
                 </p>
               </div>
-              <button onClick={handleNavigate} className="flex items-center justify-center gap-[0.5rem] h-[2.5rem] px-[1.5rem] border border-slate-200 bg-white rounded-full text-sm font-medium text-slate-800 hover:border-blue-700/30 hover:bg-slate-50 transition-colors shadow-sm self-start md:self-auto shrink-0 shadow-[0_0.1rem_0.25rem_rgba(0,0,0,0.02)]">
-                <Filter className="w-[1.25rem] h-[1.25rem]" />
-                Filtro
-              </button>
             </div>
 
             {/* Tab Conteúdo Variante (Grid) */}
             {activeTab === 'boards' ? (
 
               <div className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-[2vw]">
-                {/* Board_Card 1 */}
-                <div onClick={() => router.push('/board/dev-tic-tac')} className="group bg-white rounded-2xl p-[1.5rem] shadow-sm border border-slate-100 flex flex-col hover:border-blue-700/30 hover:shadow-[0_0.5rem_1.5rem_rgba(29,78,216,0.08)] transition-all cursor-pointer min-h-[12rem] h-full">
-                  <div className="flex justify-between items-start mb-[1rem]">
-                    <div className="w-[3rem] h-[3rem] rounded-xl bg-blue-50 flex items-center justify-center text-blue-700 group-hover:bg-blue-700 group-hover:text-white transition-colors">
-                      <Map className="w-[1.5rem] h-[1.5rem]" />
+                {filteredBoards.filter(b => !b.isArchived).map(board => (
+                  <div key={board.id} onClick={() => router.push(`/board/${board.id}`)} className="group bg-white rounded-2xl p-[1.5rem] shadow-sm border border-slate-100 flex flex-col hover:border-blue-700/30 hover:shadow-[0_0.5rem_1.5rem_rgba(29,78,216,0.08)] transition-all cursor-pointer min-h-[12rem] h-full">
+                    <div className="flex justify-between items-start mb-[1rem]">
+                      <div className={`w-[3rem] h-[3rem] rounded-xl bg-${board.color}-50 flex items-center justify-center text-${board.color}-700 group-hover:bg-blue-700 group-hover:text-white transition-colors`}>
+                        {React.createElement(ICON_MAP[board.icon as string] || Map, { className: "w-[1.5rem] h-[1.5rem]" })}
+                      </div>
+                      {userRole === 'MEMBRO' && (
+                        <span className="bg-blue-100 text-blue-700 text-xs font-bold px-[0.75rem] py-[0.25rem] rounded-full uppercase tracking-widest">
+                          EDITOR
+                        </span>
+                      )}
                     </div>
-                    {userRole === 'MEMBRO' && (
-                      <span className="bg-blue-100 text-blue-700 text-xs font-bold px-[0.75rem] py-[0.25rem] rounded-full uppercase tracking-widest">
-                        EDITOR
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-800 mb-[0.25rem]">Desenvolvimento Tic Tac</h3>
-                  <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed flex-grow">Planejamento estratégico trimestral</p>
-                  
-                  <div className="mt-auto flex items-center justify-between pt-[1.5rem] border-t border-slate-50 text-slate-400 text-xs font-medium">
-                    <div className="flex items-center -space-x-[0.5rem]">
-                        <div className="w-[2rem] h-[2rem] rounded-full border-2 border-white bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs uppercase">TS</div>
-                        <div className="w-[2rem] h-[2rem] rounded-full border-2 border-white bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-xs uppercase">AB</div>
-                        <div className="w-[2rem] h-[2rem] rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[0.6rem] text-slate-600 font-bold z-10">+4</div>
-                    </div>
-                    <div className="flex items-center gap-[1rem]">
-                      <span className="flex items-center gap-[0.25rem]"><span className="text-sm">👥</span> 12</span>
-                      <span className="flex items-center gap-[0.25rem]"><span className="text-sm">📋</span> 48</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Board_Card 2 */}
-                <div onClick={() => router.push('/board/mkt-digital')} className="group bg-white rounded-2xl p-[1.5rem] shadow-sm border border-slate-100 flex flex-col hover:border-blue-700/30 hover:shadow-[0_0.5rem_1.5rem_rgba(29,78,216,0.08)] transition-all cursor-pointer min-h-[12rem] h-full">
-                  <div className="flex justify-between items-start mb-[1rem]">
-                    <div className="w-[3rem] h-[3rem] rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-blue-700 group-hover:text-white transition-colors">
-                      <Megaphone className="w-[1.5rem] h-[1.5rem]" />
-                    </div>
-                    {userRole === 'MEMBRO' && (
-                      <span className="bg-slate-100 text-slate-500 text-xs font-bold px-[0.75rem] py-[0.25rem] rounded-full uppercase tracking-widest">
-                        VISUALIZADOR
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-800 mb-[0.25rem]">Marketing Digital</h3>
-                  <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed flex-grow">Campanhas de redes sociais</p>
-                  
-                  <div className="mt-auto flex items-center justify-between pt-[1.5rem] border-t border-slate-50 text-slate-400 text-xs font-medium">
-                    <div className="flex items-center -space-x-[0.5rem]">
-                       <div className="w-[2rem] h-[2rem] rounded-full border-2 border-white bg-red-100 text-red-700 flex items-center justify-center font-bold text-xs uppercase">MK</div>
-                       <div className="w-[2rem] h-[2rem] rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[0.6rem] text-slate-600 font-bold z-10">+2</div>
-                    </div>
-                    <div className="flex items-center gap-[1rem]">
-                      <span className="flex items-center gap-[0.25rem]"><span className="text-sm">👥</span> 5</span>
-                      <span className="flex items-center gap-[0.25rem]"><span className="text-sm">📋</span> 16</span>
+                    <h3 className="text-lg font-bold text-slate-800 mb-[0.25rem]">{board.name}</h3>
+                    <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed flex-grow">{board.description}</p>
+                    
+                    <div className="mt-auto flex items-center justify-between pt-[1.5rem] border-t border-slate-50 text-slate-400 text-xs font-medium">
+                      <div className="flex items-center -space-x-[0.5rem]">
+                          {board.initials.map((initial, i) => (
+                            <div key={i} className={`w-[2rem] h-[2rem] rounded-full border-2 border-white flex items-center justify-center font-bold text-xs uppercase ${i === 0 ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'}`}>
+                              {initial.charAt(0).toUpperCase()}
+                            </div>
+                          ))}
+                          <div className="w-[2rem] h-[2rem] rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[0.6rem] text-slate-600 font-bold z-10">+{board.extra}</div>
+                      </div>
+                      <div className="flex items-center gap-[1rem]">
+                        <span className="flex items-center gap-[0.25rem]"><span className="text-sm">👥</span> {board.members}</span>
+                        <span className="flex items-center gap-[0.25rem]"><span className="text-sm">📋</span> {board.tasks}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ))}
 
                 {/* Action Card - New Board */}
                 {userRole === 'ADMIN' && (
@@ -434,34 +442,38 @@ function TicTacDashboard({ userRole, userName, onLogout }: { userRole: string, u
 
               /* Arquivados Grid */
               <div className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-[2vw]">
-                {/* Board Arquivado 1 */}
-                <div className="group bg-slate-50 rounded-2xl p-[1.5rem] border border-slate-200 flex flex-col min-h-[12rem] h-full opacity-80 cursor-not-allowed">
-                  <div className="flex justify-between items-start mb-[1rem]">
-                    <div className="w-[3rem] h-[3rem] rounded-xl bg-slate-200 flex items-center justify-center text-slate-500">
-                      <Archive className="w-[1.5rem] h-[1.5rem]" />
+                {filteredBoards.filter(b => b.isArchived).map(board => (
+                  <div key={board.id} className="group bg-slate-50 rounded-2xl p-[1.5rem] border border-slate-200 flex flex-col min-h-[12rem] h-full opacity-80 cursor-not-allowed">
+                    <div className="flex justify-between items-start mb-[1rem]">
+                      <div className="w-[3rem] h-[3rem] rounded-xl bg-slate-200 flex items-center justify-center text-slate-500">
+                        {React.createElement(ICON_MAP[board.icon as string] || Archive, { className: "w-[1.5rem] h-[1.5rem]" })}
+                      </div>
+                      <span className="bg-slate-200 text-slate-600 text-xs font-bold px-[0.75rem] py-[0.25rem] rounded-full uppercase tracking-widest">
+                        ARQUIVADO
+                      </span>
                     </div>
-                    <span className="bg-slate-200 text-slate-600 text-xs font-bold px-[0.75rem] py-[0.25rem] rounded-full uppercase tracking-widest">
-                      ENCERRADO
-                    </span>
+                    <h3 className="text-lg font-bold text-slate-600 mb-[0.25rem]">{board.name}</h3>
+                    <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed flex-grow">{board.description}</p>
+                    
+                    <div className="mt-auto flex items-center justify-between pt-[1.5rem] border-t border-slate-200/60 text-slate-400 text-xs font-medium">
+                      <div className="flex items-center -space-x-[0.5rem] grayscale">
+                          <div className="w-[2rem] h-[2rem] rounded-full border-2 border-white bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-xs uppercase">{board.initials[0]?.charAt(0).toUpperCase()}</div>
+                      </div>
+                      <div className="flex items-center gap-[1rem]">
+                        <span className="flex items-center gap-[0.25rem]"><span className="text-sm">👥</span> {board.members}</span>
+                        <span className="flex items-center gap-[0.25rem]"><span className="text-sm">📋</span> {board.tasks}</span>
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-600 mb-[0.25rem]">Reforma Backend 2024</h3>
-                  <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed flex-grow">Migração inicial para serviços desacoplados</p>
-                  
-                  <div className="mt-auto flex items-center justify-between pt-[1.5rem] border-t border-slate-200/60 text-slate-400 text-xs font-medium">
-                    <div className="flex items-center -space-x-[0.5rem] grayscale">
-                        <div className="w-[2rem] h-[2rem] rounded-full border-2 border-white bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-xs uppercase">CR</div>
-                    </div>
-                    <div className="flex items-center gap-[1rem]">
-                      <span className="flex items-center gap-[0.25rem]"><span className="text-sm">👥</span> 8</span>
-                      <span className="flex items-center gap-[0.25rem]"><span className="text-sm">📋</span> 112</span>
-                    </div>
-                  </div>
-                </div>
+                ))}
 
-                <div className="flex flex-col items-center justify-center border-[0.15rem] border-dashed border-slate-200 bg-transparent rounded-2xl min-h-[12rem] h-full text-slate-400 p-[2rem] text-center">
-                   <FolderArchive className="w-[3rem] h-[3rem] mb-[1rem] opacity-50" />
-                   <p className="text-sm">Não há outros boards arquivados neste workspace.</p>
-                </div>
+                {/* Legacy Static Archivo (Optional, removing to show realism) */}
+                {filteredBoards.filter(b => b.isArchived).length === 0 && (
+                  <div className="flex flex-col items-center justify-center border-[0.15rem] border-dashed border-slate-200 bg-transparent rounded-2xl min-h-[12rem] h-full text-slate-400 p-[2rem] text-center">
+                    <FolderArchive className="w-[3rem] h-[3rem] mb-[1rem] opacity-50" />
+                    <p className="text-sm">Não há outros boards arquivados neste workspace.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -472,11 +484,12 @@ function TicTacDashboard({ userRole, userName, onLogout }: { userRole: string, u
         )}
       </main>
 
-      {/* Mobile Backdrop */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-30 bg-slate-800/20 backdrop-blur-sm md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
-      )}
-
+      {/* Create Board Modal */}
+      <Create_Board_Modal
+        isOpen={isCreateBoardOpen}
+        onClose={() => setIsCreateBoardOpen(false)}
+        onSave={handleSaveNewBoard}
+      />
     </div>
   );
 }
